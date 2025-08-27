@@ -1,6 +1,6 @@
 "use client"
 import dynamic from 'next/dynamic'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAnnotations } from '@/store/annotations'
 
 const Stage = dynamic(() => import('react-konva').then((m) => m.Stage), { ssr: false }) as any
@@ -12,6 +12,7 @@ export function AnnoCanvas({ rowId, width, height }: { rowId: string; width: num
   const { byRow, loadForRow, addAnnotation, tool } = useAnnotations()
   const annos = byRow[rowId] ?? []
   const [start, setStart] = useState<{ x: number; y: number } | null>(null)
+  const polyRef = useRef<{ points: number[] } | null>(null)
 
   useEffect(() => {
     loadForRow(rowId)
@@ -25,6 +26,9 @@ export function AnnoCanvas({ rowId, width, height }: { rowId: string; width: num
         addAnnotation(rowId, { geometry_type: 'point', geometry: { x: pos.x, y: pos.y } })
       } else if (tool === 'box') {
         setStart({ x: pos.x, y: pos.y })
+      } else if (tool === 'polygon') {
+        const list = polyRef.current?.points ?? []
+        polyRef.current = { points: [...list, pos.x, pos.y] }
       }
     }} onMouseUp={(e: any) => {
       if (tool === 'box' && start) {
@@ -35,6 +39,8 @@ export function AnnoCanvas({ rowId, width, height }: { rowId: string; width: num
         const h = Math.abs(pos.y - start.y)
         if (w > 2 && h > 2) addAnnotation(rowId, { geometry_type: 'box', geometry: { x, y, w, h } })
         setStart(null)
+      } else if (tool === 'polygon' && polyRef.current && polyRef.current.points.length >= 6) {
+        // double-click to finalize
       }
     }}>
       <Layer>

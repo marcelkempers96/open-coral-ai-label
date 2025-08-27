@@ -2,11 +2,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useProjectsStore } from '@/store/projects'
 import { useRowsStore } from '@/store/rows'
+import { useWorkflow } from '@/store/workflow'
 import type { Region, License } from '@/lib/types'
 
 export function ProjectTable() {
   const { projects, datasetsByProject, isLoading, load, createProject, addDataset, softDeleteDataset, restoreDataset } = useProjectsStore()
   const { rowsCountByDataset, loadCounts, addRowsByUris } = useRowsStore()
+  const { countersByProject, load: loadWorkflow } = useWorkflow()
   const [form, setForm] = useState<{ name: string; description: string; region: Region; license: License }>({
     name: '',
     description: '',
@@ -17,17 +19,20 @@ export function ProjectTable() {
   useEffect(() => {
     load()
     loadCounts()
-  }, [load, loadCounts])
+    loadWorkflow()
+  }, [load, loadCounts, loadWorkflow])
 
   const rows = useMemo(() => {
     return projects.map((p) => {
       const datasets = datasetsByProject[p.id] ?? []
       const dataRows = (datasets ?? []).reduce((acc, d) => acc + (rowsCountByDataset[d.id] ?? 0), 0)
+      const counters = countersByProject[p.id]
+      const total = counters ? counters.to_label + counters.in_review + counters.rework + counters.done + counters.skipped : 0
+      const completion = total > 0 ? Math.round(((counters?.done ?? 0) / total) * 100) : 0
       const labelsCount = 0
-      const completion = 0
-      return { p, datasets, dataRows, labelsCount, completion }
+      return { p, datasets, dataRows, labelsCount, completion, counters }
     })
-  }, [projects, datasetsByProject, rowsCountByDataset])
+  }, [projects, datasetsByProject, rowsCountByDataset, countersByProject])
 
   return (
     <div className="space-y-6">
@@ -85,6 +90,7 @@ export function ProjectTable() {
               <th className="py-2 pr-4">Completion %</th>
               <th className="py-2 pr-4">Updated</th>
               <th className="py-2 pr-4">Datasets</th>
+              <th className="py-2 pr-4">Workflow</th>
             </tr>
           </thead>
           <tbody>
@@ -93,7 +99,7 @@ export function ProjectTable() {
                 <td colSpan={7} className="py-6 text-center text-slate-500">Loading…</td>
               </tr>
             )}
-            {rows.map(({ p, datasets, dataRows, labelsCount, completion }) => (
+            {rows.map(({ p, datasets, dataRows, labelsCount, completion, counters }) => (
               <tr key={p.id} className="border-b align-top">
                 <td className="py-2 pr-4">
                   <div className="font-medium">{p.name}</div>
@@ -116,6 +122,19 @@ export function ProjectTable() {
                       if (count > 0) alert(`Imported ${count} rows`)
                     }}
                   />
+                </td>
+                <td className="py-2 pr-4 text-xs text-slate-600">
+                  {counters ? (
+                    <div className="space-y-1">
+                      <div>to_label: {counters.to_label}</div>
+                      <div>in_review: {counters.in_review}</div>
+                      <div>rework: {counters.rework}</div>
+                      <div>done: {counters.done}</div>
+                      <div>skipped: {counters.skipped}</div>
+                    </div>
+                  ) : (
+                    <span>–</span>
+                  )}
                 </td>
               </tr>
             ))}
